@@ -4,6 +4,7 @@ const express = require('express')
 const fs = require('fs')
 const http = require('http')
 const { Server } = require('socket.io')
+const os = require('os')
 
 const app = express()
 const server = http.createServer(app)
@@ -32,6 +33,7 @@ function createDevice() {
     takeoverOnConflict: true,
     puppeteer: {
       headless: 'new',
+      executablePath: os.platform() === 'android' ? '/data/data/com.termux/files/usr/bin/chromium-browser' : undefined,
       defaultViewport: null,
       args: [
         '--no-sandbox',
@@ -44,7 +46,8 @@ function createDevice() {
         '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         '--disable-blink-features=AutomationControlled',
         '--disable-web-security',
-        '--allow-running-insecure-content'
+        '--allow-running-insecure-content',
+        ...(os.platform() === 'android' ? ['--single-process'] : [])
       ],
       ignoreDefaultArgs: ['--enable-automation']
     },
