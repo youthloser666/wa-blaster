@@ -1,0 +1,9 @@
+node_modules/
+.wwebjs_auth/
+.wwebjs_cache/
+auth_info_baileys/
+*.log
+npm-debug.log*
+.DS_Store
+.env
+tmp-check-whatsapp-html.js

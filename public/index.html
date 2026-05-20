@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WA Blaster</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
+
+    :root {
+      --bg: #0d0d0d;
+      --surface: #161616;
+      --surface2: #1c1c1c;
+      --border: #2a2a2a;
+      --accent: #00ff88;
+      --accent-dim: rgba(0, 255, 136, 0.07);
+      --accent-mid: rgba(0, 255, 136, 0.2);
+      --text: #e8e8e8;
+      --muted: #555;
+      --danger: #ff4444;
+      --warn: #ffaa00;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.35;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .logo span {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 12px;
+      margin-left: 10px;
+    }
+
+    .section-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    #devices-section {
+      margin-bottom: 24px;
+    }
+
+    .devices-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    #device-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .device-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+
+    .device-card.connected {
+      border-color: rgba(0, 255, 136, 0.25);
+    }
+
+    .device-card.scan_qr {
+      border-color: rgba(255, 170, 0, 0.3);
+    }
+
+    .device-card.disconnected,
+    .device-card.auth_failed {
+      border-color: rgba(255, 68, 68, 0.25);
+    }
+
+    .device-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .device-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .device-dot.connected {
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    .device-dot.scan_qr {
+      background: var(--warn);
+    }
+
+    .device-dot.disconnected,
+    .device-dot.auth_failed {
+      background: var(--danger);
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.4
+      }
+    }
+
+    .device-name {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: var(--text);
+      flex: 1;
+      margin-left: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .btn-remove {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0;
+      line-height: 1;
+      transition: color 0.15s;
+    }
+
+    .btn-remove:hover {
+      color: var(--danger);
+    }
+
+    .device-status {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .device-qr {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .device-qr.visible {
+      display: flex;
+    }
+
+    .device-qr img {
+      width: 140px;
+      height: 140px;
+      background: white;
+      border-radius: 4px;
+      padding: 6px;
+      border: 1px solid var(--accent-mid);
+    }
+
+    .device-qr p {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .device-log {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 6px;
+      min-height: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .device-log div {
+      line-height: 1.4;
+    }
+
+    .device-log .ok {
+      color: var(--accent);
+    }
+
+    .device-log .fail {
+      color: var(--danger);
+    }
+
+    .device-log .wait {
+      color: var(--warn);
+    }
+
+    .notice-panel {
+      margin: 18px 0 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .notice {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      border-radius: 8px;
+      padding: 10px 14px;
+      border: 1px solid;
+      background: rgba(12, 19, 26, 0.9);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.02);
+    }
+
+    .notice.info {
+      color: var(--accent);
+      border-color: var(--accent-mid);
+    }
+
+    .notice.warning {
+      color: var(--warn);
+      border-color: #8d6d00;
+    }
+
+    .notice.error {
+      color: var(--danger);
+      border-color: rgba(255, 83, 73, 0.35);
+    }
+
+    button {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 10px 18px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-add {
+      background: var(--surface);
+      color: var(--accent);
+      border: 1px solid var(--accent-mid);
+    }
+
+    .btn-add:hover {
+      background: var(--accent-dim);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      flex: 1;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.85;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid rgba(255, 68, 68, 0.4);
+      display: none;
+    }
+
+    .btn-danger:hover {
+      background: rgba(255, 68, 68, 0.08);
+    }
+
+    .btn-danger.visible {
+      display: block;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-family: 'Space Mono', monospace;
+    }
+
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      padding: 10px;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+    }
+
+    #csv-input {
+      min-height: 100px;
+    }
+
+    #pesan-input {
+      min-height: 70px;
+    }
+
+    .hint {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 5px;
+      font-family: 'Space Mono', monospace;
+    }
+
+    .hint code {
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    #dist-info {
+      display: none;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-mid);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    #dist-info.visible {
+      display: block;
+    }
+
+    #progress-panel {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 12px;
+    }
+
+    #progress-panel.visible {
+      display: block;
+    }
+
+    .progress-bar-wrap {
+      background: var(--bg);
+      border-radius: 4px;
+      height: 3px;
+      margin: 10px 0 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    .progress-stats {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    #progress-count {
+      color: var(--accent);
+    }
+
+    .chip {
+      display: inline-block;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid var(--accent-mid);
+      border-radius: 4px;
+      padding: 1px 7px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <header>
+      <div class="logo">WA_BLASTER <span>multi-device</span></div>
+      <button class="btn-danger" style="display:block; padding: 6px 12px; font-size: 10px;" onclick="resetSessions()">RESET ALL SESSIONS</button>
+    </header>
+
+    <div id="notice-panel" class="notice-panel"></div>
+
+    <div id="devices-section">
+      <div class="devices-header">
+        <div class="section-title">// Devices <span class="chip" id="device-count">0</span></div>
+        <button class="btn-add" onclick="addDevice()">+ Tambah Device</button>
+      </div>
+      <div id="device-grid">
+        <div id="placeholder"
+          style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px;grid-column:1/-1;">
+          Belum ada device — klik "+ Tambah Device"
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div class="section-title" style="margin-bottom: 0;">// Kontak CSV <span class="chip" id="contact-count">0</span></div>
+        <button class="btn-add" style="padding: 4px 10px; font-size: 10px;" onclick="document.getElementById('csv-file-input').click()">↑ Upload CSV</button>
+      </div>
+      <input type="file" id="csv-file-input" accept=".csv,.txt" style="display: none;">
+      <label>format: nomer,nama,pesan_custom (nama & pesan_custom opsional)</label>
+      <textarea id="csv-input"
+        placeholder="628111111111,Budi,&#10;628222222222,Sari,Halo Sari ada promo nih&#10;628333333333,,"></textarea>
+      <div class="hint">kontak dibagi rata ke semua device yang connected (round-robin)</div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div class="section-title" style="margin-bottom: 0;">// Variasi Pesan <span class="chip" id="msg-count">0</span></div>
+        <button class="btn-add" style="padding: 4px 10px; font-size: 10px;" onclick="addMessageTemplate()">+ Tambah Variasi</button>
+      </div>
+      <div id="message-templates-container">
+        <!-- Templates will be added here -->
+      </div>
+      
+      <div style="display:flex;gap:8px;margin-top:16px;align-items:center;">
+        <label style="font-size:11px;color:var(--muted);">Delay (detik):</label>
+        <input id="delay-min" type="number" min="1" value="30" style="width:80px;padding:6px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);" />
+        <span style="font-size:12px;color:var(--muted);">—</span>
+        <input id="delay-max" type="number" min="1" value="70" style="width:80px;padding:6px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);" />
+        <div style="font-size:11px;color:var(--muted);margin-left:8px;">(min — max)</div>
+      </div>
+      <div class="hint">Sistem akan memilih 1 pesan secara acak untuk setiap nomor. Gunakan <code>{nama}</code> untuk nama kontak.</div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-blast" disabled>BLAST</button>
+        <button class="btn-danger" id="btn-stop">STOP</button>
+      </div>
+    </div>
+
+    <div id="dist-info"></div>
+
+    <div id="progress-panel">
+      <div class="section-title">// Progress</div>
+      <div class="progress-stats">
+        <span id="progress-count">0 / 0</span>
+        <span id="progress-pct">0%</span>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const socket = io()
+    let totalContacts = 0
+    let sentCount = 0
+
+    async function resetSessions() {
+      if (!confirm('PENTING: Ini akan menghapus semua sesi login (folder .wwebjs_auth) secara permanen. Anda harus scan ulang semua device. Lanjutkan?')) return
+      
+      const res = await fetch('/reset-auth', { method: 'POST' })
+      const data = await res.json()
+      alert(data.msg)
+      window.location.reload()
+    }
+
+    async function addDevice() {
+      await fetch('/devices/add', { method: 'POST' })
+    }
+
+    async function removeDevice(id) {
+      if (!confirm('Hapus device ini?')) return
+      await fetch(`/devices/${id}`, { method: 'DELETE' })
+    }
+
+    function renderDevice(d) {
+      const placeholder = document.getElementById('placeholder')
+      if (placeholder) placeholder.remove()
+
+      let card = document.getElementById(`dc-${d.id}`)
+      if (!card) {
+        card = document.createElement('div')
+        card.id = `dc-${d.id}`
+        card.className = 'device-card'
+        document.getElementById('device-grid').appendChild(card)
+      }
+
+      card.className = `device-card ${d.status}`
+
+      const statusLabels = {
+        init: 'Menginisialisasi...',
+        scan_qr: 'Scan QR sekarang',
+        authenticating: 'Terkoneksi... tunggu',
+        connected: 'Connected ✓',
+        disconnected: 'Disconnected',
+        auth_failed: 'Auth gagal'
+      }
+
+      card.innerHTML = `
+      <div class="device-top">
+        <div class="device-dot ${d.status}"></div>
+        <div class="device-name">${d.name}</div>
+        <button class="btn-remove" onclick="removeDevice('${d.id}')" title="Hapus">×</button>
+      </div>
+      <div class="device-status">${statusLabels[d.status] || d.status}</div>
+      <div class="device-qr ${d.qr ? 'visible' : ''}">
+        ${d.qr ? `<img src="${d.qr}" alt="QR"/>` : ''}
+        ${d.qr ? `<p>Linked Devices → Link a Device</p>` : ''}
+      </div>
+      <div class="device-log" id="dlog-${d.id}"></div>
+    `
+
+      updateDeviceCount()
+      updateBlastButton()
+    }
+
+    function removeDeviceCard(id) {
+      const card = document.getElementById(`dc-${id}`)
+      if (card) card.remove()
+      if (!document.querySelectorAll('.device-card').length) {
+        const grid = document.getElementById('device-grid')
+        grid.innerHTML = `<div id="placeholder" style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px;grid-column:1/-1;">Belum ada device — klik "+ Tambah Device"</div>`
+      }
+      updateDeviceCount()
+      updateBlastButton()
+    }
+
+    function updateDeviceCount() {
+      document.getElementById('device-count').textContent = document.querySelectorAll('.device-card').length
+    }
+
+    function updateBlastButton() {
+      const hasConnected = document.querySelectorAll('.device-card.connected').length > 0
+      document.getElementById('btn-blast').disabled = !hasConnected
+    }
+
+    function addNotice(message, type = 'info') {
+      const panel = document.getElementById('notice-panel')
+      if (!panel) return
+      const notice = document.createElement('div')
+      notice.className = `notice ${type}`
+      notice.textContent = message
+      panel.prepend(notice)
+      setTimeout(() => notice.remove(), 15000)
+    }
+
+    function logDevice(deviceId, html) {
+      const el = document.getElementById(`dlog-${deviceId}`)
+      if (!el) return
+      const row = document.createElement('div')
+      row.innerHTML = html
+      el.prepend(row)
+    }
+
+    socket.on('device_added', renderDevice)
+    socket.on('device_update', renderDevice)
+    socket.on('device_removed', ({ id }) => removeDeviceCard(id))
+    socket.on('device_notice', ({ deviceId, message, type }) => {
+      addNotice(message, type || 'warning')
+      logDevice(deviceId, `<span class="fail">!</span> ${message}`)
+    })
+
+    socket.on('blast_start', ({ total, distribution }) => {
+      totalContacts = total
+      sentCount = 0
+      document.getElementById('progress-panel').classList.add('visible')
+      document.getElementById('progress-count').textContent = `0 / ${total}`
+      document.getElementById('progress-fill').style.width = '0%'
+      document.getElementById('progress-pct').textContent = '0%'
+      document.getElementById('btn-blast').disabled = true
+      document.getElementById('btn-stop').classList.add('visible')
+
+      const dist = distribution.map(d => `${d.name}: ${d.count}`).join(' · ')
+      const info = document.getElementById('dist-info')
+      info.textContent = `Round-robin → ${dist}`
+      info.classList.add('visible')
+    })
+
+    socket.on('blast_progress', ({ deviceId, nomer, status, error }) => {
+      sentCount++
+      const pct = Math.round((sentCount / totalContacts) * 100)
+      document.getElementById('progress-count').textContent = `${sentCount} / ${totalContacts}`
+      document.getElementById('progress-pct').textContent = pct + '%'
+      document.getElementById('progress-fill').style.width = pct + '%'
+      if (status === 'success') {
+        logDevice(deviceId, `<span class="ok">✓</span> ${nomer}`)
+      } else {
+        logDevice(deviceId, `<span class="fail">✗</span> ${nomer} gagal${error ? ' (' + error + ')' : ''}`)
+      }
+    })
+
+    socket.on('blast_delay', ({ deviceId, seconds }) => {
+      logDevice(deviceId, `<span class="wait">~</span> tunggu ${seconds}s...`)
+    })
+
+    // Batch break countdown
+    const batchBreakTimers = {}
+    socket.on('blast_batch_break', ({ deviceId, minutes }) => {
+      let remaining = minutes * 60
+      clearInterval(batchBreakTimers[deviceId])
+      batchBreakTimers[deviceId] = setInterval(() => {
+        remaining--
+        const m = Math.floor(remaining / 60)
+        const s = String(remaining % 60).padStart(2, '0')
+        logDevice(deviceId, `<span class="wait">⏸</span> batch break ${m}:${s}`)
+        if (remaining <= 0) clearInterval(batchBreakTimers[deviceId])
+      }, 1000)
+    })
+
+    socket.on('blast_done', () => {
+      document.getElementById('btn-blast').disabled = false
+      document.getElementById('btn-stop').classList.remove('visible')
+      document.getElementById('progress-count').textContent += ' ✓'
+      // Clear all batch break timers
+      Object.values(batchBreakTimers).forEach(t => clearInterval(t))
+    })
+
+    socket.on('blast_error', msg => {
+      alert('Error: ' + msg)
+      document.getElementById('btn-blast').disabled = false
+    })
+
+    document.getElementById('csv-input').addEventListener('input', () => {
+      const lines = document.getElementById('csv-input').value.trim().split('\n').filter(l => l.trim())
+      document.getElementById('contact-count').textContent = lines.length
+    })
+
+    function addMessageTemplate(text = '') {
+      const container = document.getElementById('message-templates-container')
+      const id = Date.now() + Math.random()
+      const div = document.createElement('div')
+      div.className = 'template-item'
+      div.style.marginBottom = '10px'
+      div.style.position = 'relative'
+      div.id = `tmpl-${id}`
+      div.innerHTML = `
+        <textarea class="pesan-template" style="min-height:60px; padding-right:30px;" placeholder="Tulis variasi pesan di sini...">${text}</textarea>
+        <button onclick="removeMessageTemplate('${id}')" style="position:absolute; right:8px; top:8px; background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px;">×</button>
+      `
+      container.appendChild(div)
+      updateMsgCount()
+    }
+
+    function removeMessageTemplate(id) {
+      const el = document.getElementById(`tmpl-${id}`)
+      if (el) el.remove()
+      updateMsgCount()
+    }
+
+    function updateMsgCount() {
+      const count = document.querySelectorAll('.pesan-template').length
+      document.getElementById('msg-count').textContent = count
+    }
+
+    // Default Tarik Tunai Templates
+    const defaultTemplates = [
+      "Halo {nama}, butuh dana tunai cepat? Melayani tarik tunai gestun amanah. Proses 5 menit cair.",
+      "Permisi {nama}, kami melayani jasa tarik tunai kartu kredit & paylater (Akulaku/Kredivo/Spaylater). Rate bersaing!",
+      "Tarik tunai mudah & praktis {nama}. Hubungi kami untuk jasa gestun terpercaya. Aman & Terjamin.",
+      "Info jasa tarik tunai {nama}, rate bersaing & pencairan instan ke semua rekening/e-wallet. Minat?"
+    ]
+
+    // Initialize with defaults
+    defaultTemplates.forEach(t => addMessageTemplate(t))
+
+    document.getElementById('btn-blast').addEventListener('click', async () => {
+      const csvContent = document.getElementById('csv-input').value.trim()
+      const templateEls = document.querySelectorAll('.pesan-template')
+      const pesans = Array.from(templateEls).map(el => el.value.trim()).filter(v => v)
+      
+      if (!csvContent) return alert('Isi kontak CSV dulu')
+      if (pesans.length === 0) return alert('Isi minimal satu variasi pesan')
+      
+      const delayMin = parseInt(document.getElementById('delay-min').value) || 30
+      const delayMax = parseInt(document.getElementById('delay-max').value) || 70
+      if (delayMin > delayMax) return alert('Delay min tidak boleh lebih besar dari max')
+      
+      const res = await fetch('/blast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvContent, pesans, delayMin, delayMax })
+      })
+      const data = await res.json()
+      if (!data.ok) alert(data.msg)
+    })
+
+    document.getElementById('btn-stop').addEventListener('click', async () => {
+      await fetch('/stop', { method: 'POST' })
+      document.getElementById('btn-stop').classList.remove('visible')
+      document.getElementById('btn-blast').disabled = false
+    })
+
+    fetch('/status').then(r => r.json()).then(({ devices }) => {
+      if (devices) devices.forEach(renderDevice)
+    })
+
+    // CSV Upload Handler
+    document.getElementById('csv-file-input').addEventListener('change', function (e) {
+      const file = e.target.files[0]
+      if (!file) return
+
+      const reader = new FileReader()
+      reader.onload = function (e) {
+        const content = e.target.result
+        const csvArea = document.getElementById('csv-input')
+        csvArea.value = content
+        // Trigger input event to update contact count chip
+        csvArea.dispatchEvent(new Event('input'))
+        // Reset file input so same file can be uploaded again if needed
+        document.getElementById('csv-file-input').value = ''
+      }
+      reader.readAsText(file)
+    })
+  </script>
+</body>
+
+</html>
